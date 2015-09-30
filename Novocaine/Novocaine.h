@@ -24,6 +24,7 @@
 #import <CoreFoundation/CoreFoundation.h>
 #import <AudioToolbox/AudioToolbox.h>
 #import <Accelerate/Accelerate.h>
+#import <UIKit/UIKit.h>
 
 #if defined __MAC_OS_X_VERSION_MAX_ALLOWED
     #define USING_OSX 
@@ -93,7 +94,6 @@ typedef void (^NovocaineInputBlock)(float *data, UInt32 numFrames, UInt32 numCha
 
 #if defined ( USING_IOS )
 - (void)checkSessionProperties;
-- (void)checkAudioSource;
 #endif
 
 

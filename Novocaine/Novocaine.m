@@ -41,8 +41,17 @@
 
 #import "TargetConditionals.h"
 
+#ifdef DEBUG
+#define OPT_LOG
+#endif
 
+#ifndef OPT_LOG
+#define NSLog(...)
+#endif
 
+#ifndef OPT_LOG
+#define CheckError( function, ...) function
+#else
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -65,15 +74,16 @@ extern "C" {
         
         exit(1);
     }
+#endif
     
-    
+#if OPT_USE_MICROPHONE
     OSStatus inputCallback (void						*inRefCon,
                             AudioUnitRenderActionFlags	* ioActionFlags,
                             const AudioTimeStamp 		* inTimeStamp,
                             UInt32						inOutputBusNumber,
                             UInt32						inNumberFrames,
                             AudioBufferList				* ioData);
-    
+#endif
     OSStatus renderCallback (void						*inRefCon,
                              AudioUnitRenderActionFlags	* ioActionFlags,
                              const AudioTimeStamp 		* inTimeStamp,
@@ -269,13 +279,31 @@ static Novocaine *audioManager = nil;
     // Initialize and configure the audio session, and add an interuption listener
     
 #if defined ( USING_IOS )
-    
+
+    AVAudioSession *session = [AVAudioSession sharedInstance];
+
+    NSError *setCategoryError = nil;
+    if (![session setCategory:
+#if OPT_USE_MICROPHONE
+          AVAudioSessionCategoryPlayAndRecord
+#else
+          AVAudioSessionCategoryPlayback
+#endif
+#if DEBUG   //help developers listen to music during development :)
+                withOptions:AVAudioSessionCategoryOptionMixWithOthers
+#endif
+                error:&setCategoryError]) {
+        // handle error
+    }
+
     // Set the audio session active
     NSError *err = nil;
     if (![[AVAudioSession sharedInstance] setActive:YES error:&err]){
         NSLog(@"Couldn't activate audio session: %@", err);
     }
+#if OPT_USE_MICROPHONE
     [self checkAudioSource];
+#endif
 #elif defined ( USING_OSX )
     // TODO: grab the audio device
     [self enumerateAudioDevices];
@@ -292,13 +320,6 @@ static Novocaine *audioManager = nil;
     
 #if defined ( USING_IOS )
     
-    // TODO: Move this somewhere more dynamic - should update category as appropriate to current application behavior
-    UInt32 sessionCategory = kAudioSessionCategory_PlayAndRecord;
-    CheckError( AudioSessionSetProperty (kAudioSessionProperty_AudioCategory,
-                                         sizeof (sessionCategory),
-                                         &sessionCategory), "Couldn't set audio category");    
-    
-    
     // Add a property listener, to listen to changes to the session
     CheckError( AudioSessionAddPropertyListener(kAudioSessionProperty_AudioRouteChange, sessionPropertyListener, (__bridge void*)self), "Couldn't add audio session property listener");
     
@@ -307,6 +328,10 @@ static Novocaine *audioManager = nil;
 #if !TARGET_IPHONE_SIMULATOR
     Float32 preferredBufferSize = 0.0232;
     CheckError( AudioSessionSetProperty(kAudioSessionProperty_PreferredHardwareIOBufferDuration, sizeof(preferredBufferSize), &preferredBufferSize), "Couldn't set the preferred buffer duration");
+/*
+    unsigned int dataLength = sizeof(preferredBufferSize);
+    CheckError( AudioSessionGetProperty(kAudioSessionProperty_CurrentHardwareIOBufferDuration, &dataLength, &preferredBufferSize), "Couldn't get buffer duration");
+  */
 #endif
 
     
@@ -352,6 +377,11 @@ static Novocaine *audioManager = nil;
     
     // Enable input
     // TODO: Conditionally disable input if option has not been specified
+#if OPT_USE_MICROPHONE
+    //calling this pops up the "this app would like to acces your microphone, allow/deny" dialog on ios 7+
+    //only happens the very first time the app launched on a device - note that the setting survives app uninstall!
+
+    //on iOS emitting sounds work without enabling kAudioUnitScope_Output
     UInt32 one = 1;
     CheckError( AudioUnitSetProperty(_inputUnit,
                                      kAudioOutputUnitProperty_EnableIO,
@@ -359,7 +389,7 @@ static Novocaine *audioManager = nil;
                                      kInputBus,
                                      &one,
                                      sizeof(one)), "Couldn't enable IO on the input scope of output unit");
-    
+#endif
     
 #if defined ( USING_OSX )    
     // Disable output on the input unit
@@ -550,7 +580,7 @@ static Novocaine *audioManager = nil;
     
 	if (_outputFormat.mFormatFlags & kAudioFormatFlagIsNonInterleaved) {
         // The audio is non-interleaved
-        printf("Not interleaved!\n");
+        NSLog(@"Not interleaved!\n");
         self.isInterleaved = NO;
         
         // allocate an AudioBufferList plus enough space for array of AudioBuffers
@@ -569,7 +599,7 @@ static Novocaine *audioManager = nil;
 		}
         
 	} else {
-		printf ("Format is interleaved\n");
+		NSLog (@"Format is interleaved\n");
         self.isInterleaved = YES;
         
 		// allocate an AudioBufferList plus enough space for array of AudioBuffers
@@ -590,6 +620,7 @@ static Novocaine *audioManager = nil;
     
     // Slap a render callback on the unit
     AURenderCallbackStruct callbackStruct;
+#if OPT_USE_MICROPHONE
     callbackStruct.inputProc = inputCallback;
     callbackStruct.inputProcRefCon = (__bridge void *)(self);
     
@@ -599,7 +630,7 @@ static Novocaine *audioManager = nil;
                                      0, 
                                      &callbackStruct, 
                                      sizeof(callbackStruct)), "Couldn't set the callback on the input unit");
-    
+#endif
     
     callbackStruct.inputProc = renderCallback;
     callbackStruct.inputProcRefCon = (__bridge void *)(self);
@@ -711,11 +742,14 @@ static Novocaine *audioManager = nil;
 	UInt32 isInputAvailable=0;
     
 #if defined ( USING_IOS )
+#if OPT_USE_MICROPHONE
     UInt32 size = sizeof(isInputAvailable);
 	CheckError( AudioSessionGetProperty(kAudioSessionProperty_AudioInputAvailable, 
                                         &size, 
                                         &isInputAvailable), "Couldn't check if input was available");
-    
+#else
+    isInputAvailable = 1;
+#endif
 #elif defined ( USING_OSX )
     isInputAvailable = 1;
     
@@ -740,6 +774,7 @@ static Novocaine *audioManager = nil;
 
 
 #pragma mark - Render Methods
+#if OPT_USE_MICROPHONE
 OSStatus inputCallback   (void						*inRefCon,
                           AudioUnitRenderActionFlags	* ioActionFlags,
                           const AudioTimeStamp 		* inTimeStamp,
@@ -811,6 +846,7 @@ OSStatus inputCallback   (void						*inRefCon,
 	
 	
 }
+#endif
 
 OSStatus renderCallback (void						*inRefCon,
                          AudioUnitRenderActionFlags	* ioActionFlags,
@@ -909,6 +945,7 @@ void sessionPropertyListener(void *                  inClientData,
     
 }
 
+#if OPT_USE_MICROPHONE
 - (void)checkAudioSource {
     // Check what the incoming audio route is.
     UInt32 propertySize = sizeof(CFStringRef);
@@ -931,32 +968,30 @@ void sessionPropertyListener(void *                  inClientData,
     NSLog(@"Input available? %d", self.inputAvailable);
     
 }
+#endif
 
 
 // To be run ONCE per session property change and once on initialization.
 - (void)checkSessionProperties
 {	
-    
+#if OPT_USE_MICROPHONE
     // Check if there is input, and from where
     [self checkAudioSource];
-    
+#endif
     // Check the number of input channels.
     // Find the number of channels
     UInt32 size = sizeof(self.numInputChannels);
     UInt32 newNumChannels;
+#if OPT_USE_MICROPHONE
     CheckError( AudioSessionGetProperty(kAudioSessionProperty_CurrentHardwareInputNumberChannels, &size, &newNumChannels), "Checking number of input channels");
     self.numInputChannels = newNumChannels;
-    //    self.numInputChannels = 1;
     NSLog(@"We've got %u input channels", (unsigned int)self.numInputChannels);
-    
-    
+#endif
     // Check the number of input channels.
     // Find the number of channels
     CheckError( AudioSessionGetProperty(kAudioSessionProperty_CurrentHardwareOutputNumberChannels, &size, &newNumChannels), "Checking number of output channels");
     self.numOutputChannels = newNumChannels;
-    //    self.numOutputChannels = 1;
     NSLog(@"We've got %u output channels", (unsigned int)self.numOutputChannels);
-    
     
     // Get the hardware sampling rate. This is settable, but here we're only reading.
     Float64 currentSamplingRate;
@@ -967,6 +1002,7 @@ void sessionPropertyListener(void *                  inClientData,
 	
 }
 
+#if OPT_USE_MICROPHONE
 void sessionInterruptionListener(void *inClientData, UInt32 inInterruption) {
     
 	Novocaine *sm = (__bridge Novocaine *)inClientData;
@@ -982,7 +1018,7 @@ void sessionInterruptionListener(void *inClientData, UInt32 inInterruption) {
 	}
 	
 }
-
+#endif
 #endif
 
 
