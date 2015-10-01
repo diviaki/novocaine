@@ -254,15 +254,16 @@ static Novocaine *audioManager = nil;
 #ifdef USING_IOS
 - (void)setForceOutputToSpeaker:(BOOL)forceOutputToSpeaker
 {
-    
-#if !TARGET_IPHONE_SIMULATOR
+	
+#if !TARGET_IPHONE_SIMULATOR && OPT_USE_MICROPHONE
     UInt32 value = forceOutputToSpeaker ? 1 : 0;
-    // should not be fatal error
-    OSStatus err = AudioSessionSetProperty(kAudioSessionProperty_OverrideCategoryDefaultToSpeaker, sizeof(UInt32), &value);
-    if (err != noErr){
-        NSLog(@"Could not override audio output route to speaker");
-    }
-    else{
+	
+    AVAudioSession *session = [AVAudioSession sharedInstance];
+	
+    NSError *error = nil;
+    if (![session overrideOutputAudioPort:AVAudioSessionCategoryOptionDefaultToSpeaker error:&error]) {
+        NSLog(@"Could not override audio output route to speaker - %@", [error localizedDescription]);
+    }else{
         _forceOutputToSpeaker = forceOutputToSpeaker;
     }
 #else
@@ -319,15 +320,30 @@ static Novocaine *audioManager = nil;
     // ---------------------------
     
 #if defined ( USING_IOS )
-    
+	
+    AVAudioSession *session = [AVAudioSession sharedInstance];
+	
+    NSError *error = nil;
+	//if (![session overrideOutputAudioPort:AVAudioSessionCategoryOptionDefaultToSpeaker error:&error]) {
+	//	NSLog(@"Could not override audio output route to speaker - %@", [error localizedDescription]);
+	//}else{
+		
     // Add a property listener, to listen to changes to the session
-    CheckError( AudioSessionAddPropertyListener(kAudioSessionProperty_AudioRouteChange, sessionPropertyListener, (__bridge void*)self), "Couldn't add audio session property listener");
-    
+    //CheckError( AudioSessionAddPropertyListener(kAudioSessionProperty_AudioRouteChange, sessionPropertyListener, (__bridge void*)self), "Couldn't add audio session property listener");
+    [[NSNotificationCenter defaultCenter] addObserver: self
+					     selector: @selector(handleRouteChange:)
+						 name: AVAudioSessionRouteChangeNotification
+					       object: session];
+	
     // Set the buffer size, this will affect the number of samples that get rendered every time the audio callback is fired
     // A small number will get you lower latency audio, but will make your processor work harder
 #if !TARGET_IPHONE_SIMULATOR
     Float32 preferredBufferSize = 0.0232;
-    CheckError( AudioSessionSetProperty(kAudioSessionProperty_PreferredHardwareIOBufferDuration, sizeof(preferredBufferSize), &preferredBufferSize), "Couldn't set the preferred buffer duration");
+	
+	
+	
+    if(![session setPreferredIOBufferDuration:preferredBufferSize error:&error])
+        NSLog(@"Couldn't set the preferred buffer duration - %@", [error localizedDescription]);
 /*
     unsigned int dataLength = sizeof(preferredBufferSize);
     CheckError( AudioSessionGetProperty(kAudioSessionProperty_CurrentHardwareIOBufferDuration, &dataLength, &preferredBufferSize), "Couldn't get buffer duration");
@@ -926,23 +942,15 @@ OSStatus renderCallback (void						*inRefCon,
 
 #pragma mark - Audio Session Listeners
 #if defined (USING_IOS)
-void sessionPropertyListener(void *                  inClientData,
-							 AudioSessionPropertyID  inID,
-							 UInt32                  inDataSize,
-							 const void *            inData){
-	
+-(void)handleRouteChange:(NSNotification*)notification{
     // Determines the reason for the route change, to ensure that it is not
     //      because of a category change.
-    CFNumberRef routeChangeReasonRef = (CFNumberRef)CFDictionaryGetValue ((CFDictionaryRef)inData, CFSTR (kAudioSession_AudioRouteChangeKey_Reason) );
-    SInt32 routeChangeReason;
-    CFNumberGetValue (routeChangeReasonRef, kCFNumberSInt32Type, &routeChangeReason);
-    
-    if (inID == kAudioSessionProperty_AudioRouteChange && routeChangeReason != kAudioSessionRouteChangeReason_CategoryChange)
+    NSInteger  reason = [[[notification userInfo] objectForKey:AVAudioSessionRouteChangeReasonKey] integerValue];
+
+    if (reason != AVAudioSessionRouteChangeReasonCategoryChange)
     {
-        Novocaine *sm = (__bridge Novocaine *)inClientData;
-        [sm checkSessionProperties];
+        [self checkSessionProperties];
     }
-    
 }
 
 #if OPT_USE_MICROPHONE
@@ -970,36 +978,24 @@ void sessionPropertyListener(void *                  inClientData,
 }
 #endif
 
-
 // To be run ONCE per session property change and once on initialization.
 - (void)checkSessionProperties
-{	
+{
+    AVAudioSession *session = [AVAudioSession sharedInstance];
 #if OPT_USE_MICROPHONE
     // Check if there is input, and from where
     [self checkAudioSource];
-#endif
     // Check the number of input channels.
-    // Find the number of channels
-    UInt32 size = sizeof(self.numInputChannels);
-    UInt32 newNumChannels;
-#if OPT_USE_MICROPHONE
-    CheckError( AudioSessionGetProperty(kAudioSessionProperty_CurrentHardwareInputNumberChannels, &size, &newNumChannels), "Checking number of input channels");
-    self.numInputChannels = newNumChannels;
+    self.numInputChannels = [session inputNumberOfChannels];
     NSLog(@"We've got %u input channels", (unsigned int)self.numInputChannels);
 #endif
     // Check the number of input channels.
-    // Find the number of channels
-    CheckError( AudioSessionGetProperty(kAudioSessionProperty_CurrentHardwareOutputNumberChannels, &size, &newNumChannels), "Checking number of output channels");
-    self.numOutputChannels = newNumChannels;
+    self.numOutputChannels = [session outputNumberOfChannels];
     NSLog(@"We've got %u output channels", (unsigned int)self.numOutputChannels);
     
     // Get the hardware sampling rate. This is settable, but here we're only reading.
-    Float64 currentSamplingRate;
-    size = sizeof(currentSamplingRate);
-    CheckError( AudioSessionGetProperty(kAudioSessionProperty_CurrentHardwareSampleRate, &size, &currentSamplingRate), "Checking hardware sampling rate");
-    self.samplingRate = currentSamplingRate;
+    self.samplingRate = [session sampleRate];
     NSLog(@"Current sampling rate: %f", self.samplingRate);
-	
 }
 
 #if OPT_USE_MICROPHONE
