@@ -90,19 +90,9 @@ extern "C" {
                              UInt32						inOutputBusNumber,
                              UInt32						inNumberFrames,
                              AudioBufferList				* ioData);
-    
-    
-#if defined (USING_IOS)
-    void sessionPropertyListener(void *                  inClientData,
-                                 AudioSessionPropertyID  inID,
-                                 UInt32                  inDataSize,
-                                 const void *            inData);
-    
-#endif
-    
-    
+
     void sessionInterruptionListener(void *inClientData, UInt32 inInterruption);
-    
+
 #ifdef __cplusplus
 }
 #endif
@@ -324,9 +314,6 @@ static Novocaine *audioManager = nil;
     AVAudioSession *session = [AVAudioSession sharedInstance];
 	
     NSError *error = nil;
-	//if (![session overrideOutputAudioPort:AVAudioSessionCategoryOptionDefaultToSpeaker error:&error]) {
-	//	NSLog(@"Could not override audio output route to speaker - %@", [error localizedDescription]);
-	//}else{
 		
     // Add a property listener, to listen to changes to the session
     //CheckError( AudioSessionAddPropertyListener(kAudioSessionProperty_AudioRouteChange, sessionPropertyListener, (__bridge void*)self), "Couldn't add audio session property listener");
@@ -459,8 +446,7 @@ static Novocaine *audioManager = nil;
                                      &_outputFormat,
                                      &size ), 
                "Couldn't get the hardware output stream format");
-    
-    // TODO: check this works on iOS!
+	
     _inputFormat.mSampleRate = 44100.0;
     _outputFormat.mSampleRate = 44100.0;
     self.samplingRate = _inputFormat.mSampleRate;
@@ -668,10 +654,7 @@ static Novocaine *audioManager = nil;
                                      sizeof(callbackStruct)), 
                "Couldn't set the render callback on the input unit");    
 #endif
-    
-    
-    
-    
+
 	CheckError(AudioUnitInitialize(_inputUnit), "Couldn't initialize the output unit");
 #if defined ( USING_OSX )
     CheckError(AudioUnitInitialize(_outputUnit), "Couldn't initialize the output unit");
@@ -734,7 +717,6 @@ static Novocaine *audioManager = nil;
         NSLog(@"Device: %@, ID: %d", thisDeviceName, self.deviceIDs[i]);
         [self.deviceNames addObject:thisDeviceName];
     }
-    
 }
 
 #endif
@@ -893,7 +875,6 @@ OSStatus renderCallback (void						*inRefCon,
         
         
         // Put the rendered data into the output buffer
-        // TODO: convert SInt16 ranges to float ranges.
         if ( sm.numBytesPerSample == 4 ) // then we've already got floats
         {
             
@@ -934,6 +915,7 @@ OSStatus renderCallback (void						*inRefCon,
             }
             
         }
+	    
     }
 
     return noErr;
@@ -998,7 +980,6 @@ OSStatus renderCallback (void						*inRefCon,
     NSLog(@"Current sampling rate: %f", self.samplingRate);
 }
 
-#if OPT_USE_MICROPHONE
 void sessionInterruptionListener(void *inClientData, UInt32 inInterruption) {
     
 	Novocaine *sm = (__bridge Novocaine *)inClientData;
@@ -1014,7 +995,7 @@ void sessionInterruptionListener(void *inClientData, UInt32 inInterruption) {
 	}
 	
 }
-#endif
+
 #endif
 
 
