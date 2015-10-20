@@ -111,6 +111,7 @@ static Novocaine *audioManager = nil;
 @property (nonatomic, assign, readwrite) UInt32 numInputChannels;
 @property (nonatomic, assign, readwrite) UInt32 numOutputChannels;
 @property (nonatomic, assign, readwrite) Float64 samplingRate;
+@property (nonatomic, assign, readwrite) NSTimeInterval bufferDuration;
 @property (nonatomic, assign, readwrite) BOOL isInterleaved;
 @property (nonatomic, assign, readwrite) UInt32 numBytesPerSample;
 @property (nonatomic, assign, readwrite) AudioStreamBasicDescription inputFormat;
@@ -325,16 +326,9 @@ static Novocaine *audioManager = nil;
     // Set the buffer size, this will affect the number of samples that get rendered every time the audio callback is fired
     // A small number will get you lower latency audio, but will make your processor work harder
 #if !TARGET_IPHONE_SIMULATOR
-    Float32 preferredBufferSize = 0.0232;
+    Float32 preferredBufferSize = 0.02322; //default on iOS9@iPhone5
 	
-	
-	
-    if(![session setPreferredIOBufferDuration:preferredBufferSize error:&error])
-        NSLog(@"Couldn't set the preferred buffer duration - %@", [error localizedDescription]);
-/*
-    unsigned int dataLength = sizeof(preferredBufferSize);
-    CheckError( AudioSessionGetProperty(kAudioSessionProperty_CurrentHardwareIOBufferDuration, &dataLength, &preferredBufferSize), "Couldn't get buffer duration");
-  */
+    [session setPreferredIOBufferDuration:preferredBufferSize error:&error];
 #endif
 
     
@@ -978,6 +972,9 @@ OSStatus renderCallback (void						*inRefCon,
     // Get the hardware sampling rate. This is settable, but here we're only reading.
     self.samplingRate = [session sampleRate];
     NSLog(@"Current sampling rate: %f", self.samplingRate);
+	
+    self.bufferDuration = [session IOBufferDuration];
+    NSLog(@"IO buffer duration is %f", self.bufferDuration);
 }
 
 void sessionInterruptionListener(void *inClientData, UInt32 inInterruption) {

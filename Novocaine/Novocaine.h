@@ -76,6 +76,7 @@ typedef void (^NovocaineInputBlock)(float *data, UInt32 numFrames, UInt32 numCha
 @property (nonatomic, assign, readonly) UInt32 numInputChannels;
 @property (nonatomic, assign, readonly) UInt32 numOutputChannels;
 @property (nonatomic, assign, readonly) Float64 samplingRate;
+@property (nonatomic, assign, readonly) NSTimeInterval bufferDuration;
 @property (nonatomic, assign, readonly) BOOL isInterleaved;
 @property (nonatomic, assign, readonly) UInt32 numBytesPerSample;
 @property (nonatomic, assign, readonly) AudioStreamBasicDescription inputFormat;
