@@ -571,6 +571,9 @@ static Novocaine *audioManager = nil;
 									 &size),
 				"Couldn't get buffer frame size from input unit");
 	UInt32 bufferSizeBytes = bufferSizeFrames * sizeof(Float32);
+	// Buffer duration on OSX
+	self.bufferDuration = 1.0f/self.samplingRate*bufferSizeFrames;
+	NSLog(@"IO buffer duration is %f", self.bufferDuration);
 #endif
     
     
