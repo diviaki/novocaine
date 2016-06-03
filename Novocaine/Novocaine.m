@@ -372,6 +372,8 @@ static Novocaine *audioManager = nil;
     CheckError( AudioComponentInstanceNew(outputComponent, &_outputUnit), "Couldn't create the output audio unit");
 #endif
     
+    UInt32 one = 1;
+
     // Enable input
     // TODO: Conditionally disable input if option has not been specified
 #if OPT_USE_MICROPHONE
@@ -379,7 +381,6 @@ static Novocaine *audioManager = nil;
     //only happens the very first time the app launched on a device - note that the setting survives app uninstall!
 
     //on iOS emitting sounds work without enabling kAudioUnitScope_Output
-    UInt32 one = 1;
     CheckError( AudioUnitSetProperty(_inputUnit,
                                      kAudioOutputUnitProperty_EnableIO,
                                      kAudioUnitScope_Input,
