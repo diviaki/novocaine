@@ -25,13 +25,15 @@
 #import <AudioToolbox/AudioToolbox.h>
 #import <Accelerate/Accelerate.h>
 
-#if defined __MAC_OS_X_VERSION_MAX_ALLOWED
-    #define USING_OSX 
-    #include <CoreAudio/CoreAudio.h>
-#else
+#import "TargetConditionals.h"
+
+#if TARGET_OS_IPHONE
     #define USING_IOS
     #include <AVFoundation/AVFoundation.h>
     #import <UIKit/UIKit.h>
+#else
+    #define USING_OSX 
+    #include <CoreAudio/CoreAudio.h>
 #endif
 
 #include <Block.h>
@@ -41,11 +43,7 @@ FOUNDATION_EXTERN void CheckError(OSStatus error, const char *operation);
 typedef void (^NovocaineOutputBlock)(float *data, UInt32 numFrames, UInt32 numChannels);
 typedef void (^NovocaineInputBlock)(float *data, UInt32 numFrames, UInt32 numChannels);
 
-#if defined (USING_IOS)
-@interface Novocaine : NSObject <UIAlertViewDelegate>
-#elif defined (USING_OSX)
 @interface Novocaine : NSObject
-#endif
 
 // ------ These properties/methods are used for configuration -------
 

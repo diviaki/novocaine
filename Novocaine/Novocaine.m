@@ -39,8 +39,6 @@
 #define kOutputBus 0
 #define kDefaultDevice 999999
 
-#import "TargetConditionals.h"
-
 #ifdef DEBUG
 #define OPT_LOG
 #endif
@@ -90,8 +88,6 @@ extern "C" {
                              UInt32						inOutputBusNumber,
                              UInt32						inNumberFrames,
                              AudioBufferList				* ioData);
-
-    void sessionInterruptionListener(void *inClientData, UInt32 inInterruption);
 
 #ifdef __cplusplus
 }
@@ -444,7 +440,6 @@ static Novocaine *audioManager = nil;
 	
     _inputFormat.mSampleRate = self.samplingRate;
     _outputFormat.mSampleRate = self.samplingRate;
-    self.samplingRate = _inputFormat.mSampleRate;
     self.numBytesPerSample = _inputFormat.mBitsPerChannel / 8;
     
     size = sizeof(AudioStreamBasicDescription);
@@ -979,22 +974,6 @@ OSStatus renderCallback (void						*inRefCon,
 	
     self.bufferDuration = [session IOBufferDuration];
     NSLog(@"IO buffer duration is %f", self.bufferDuration);
-}
-
-void sessionInterruptionListener(void *inClientData, UInt32 inInterruption) {
-    
-	Novocaine *sm = (__bridge Novocaine *)inClientData;
-    
-	if (inInterruption == kAudioSessionBeginInterruption) {
-		NSLog(@"Begin interuption");
-		sm.inputAvailable = NO;
-	}
-	else if (inInterruption == kAudioSessionEndInterruption) {
-		NSLog(@"End interuption");	
-		sm.inputAvailable = YES;
-		[sm play];
-	}
-	
 }
 
 #endif
