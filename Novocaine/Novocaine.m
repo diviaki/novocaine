@@ -325,6 +325,10 @@ static Novocaine *audioManager = nil;
     Float32 preferredBufferSize = 0.02322; //default on iOS9@iPhone5
 	
     [session setPreferredIOBufferDuration:preferredBufferSize error:&error];
+	
+    //prevent runtime switching between 44.1 (headphones) and 48kHz (built-in speakers) on latest iPhone models with iOS9
+    [session setPreferredSampleRate:48000. error:nil];
+	
 #endif
 
     
