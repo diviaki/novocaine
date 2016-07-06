@@ -123,6 +123,7 @@ static Novocaine *audioManager = nil;
 @property (nonatomic, strong) NSString *defaultInputDeviceName;
 @property (nonatomic, assign) AudioDeviceID defaultOutputDeviceID;
 @property (nonatomic, strong) NSString *defaultOutputDeviceName;
+@property (nonatomic, strong) AudioFileWriter* fileWriter;
 - (void)enumerateAudioDevices;
 #endif
 
@@ -869,7 +870,11 @@ OSStatus renderCallback (void						*inRefCon,
         
         // Collect data to render from the callbacks
         sm.outputBlock(sm.outData, inNumberFrames, sm.numOutputChannels);
-        
+
+#if defined(USING_OSX)
+        if( sm.fileWriter )
+		[sm.fileWriter writeNewAudio:sm.outData numFrames:inNumberFrames numChannels:sm.numOutputChannels];
+#endif
         
         // Put the rendered data into the output buffer
         if ( sm.numBytesPerSample == 4 ) // then we've already got floats
@@ -998,6 +1003,23 @@ OSStatus renderCallback (void						*inRefCon,
     
 }
 
+- (void)recordOutput:(NSString*)filename
+{
+	if( filename ){
+    NSArray *pathComponents = [NSArray arrayWithObjects:
+                               [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) lastObject],
+                               filename,
+                               nil];
+    NSURL *outputFileURL = [NSURL fileURLWithPathComponents:pathComponents];
+
+    _fileWriter = [[AudioFileWriter alloc]
+                       initWithAudioFileURL:outputFileURL
+                       samplingRate:self.samplingRate
+                       numChannels:self.numInputChannels];
+    }else{
+    _fileWriter = nil;
+    }
+}
 #endif
 
 

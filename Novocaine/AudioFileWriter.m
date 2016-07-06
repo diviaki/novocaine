@@ -161,51 +161,13 @@ static pthread_mutex_t outputAudioFileLock;
 }
 
 
-
-- (void)configureWriterCallback
-{
-    
-    if (!self.callbackTimer)
-    {
-        self.callbackTimer = dispatch_source_create(DISPATCH_SOURCE_TYPE_TIMER, 0, 0, dispatch_get_main_queue());
-    }
-    
-    if (self.callbackTimer)
-    {
-        UInt32 numSamplesPerCallback = (UInt32)( self.latency * self.samplingRate );
-        dispatch_source_set_timer(self.callbackTimer, dispatch_walltime(NULL, 0), self.latency*NSEC_PER_SEC, 0);
-        dispatch_source_set_event_handler(self.callbackTimer, ^{
-            
-            
-            if (self.writerBlock) {                
-                // Call out with the audio that we've got.
-                self.writerBlock(self.outputBuffer, numSamplesPerCallback, self.numChannels);
-                
-                // Get audio from the block supplier
-                [self writeNewAudio:self.outputBuffer numFrames:numSamplesPerCallback numChannels:self.numChannels];
-                
-            }
-            
-        });
-        
-    }
-    
-}
-
-
-
 - (void)record;
 {
-    
-    // Configure (or if necessary, create and start) the timer for retrieving MP3 audio
-    [self configureWriterCallback];
-    
     if (!self.recording)
     {
         dispatch_resume(self.callbackTimer);
         self.recording = TRUE;
     }
-    
 }
 
 - (void)stop

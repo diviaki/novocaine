@@ -31,9 +31,6 @@
 
 @interface AudioFileWriter : NSObject
 
-// ----- Read-write ------
-@property (nonatomic, copy) NovocaineInputBlock writerBlock;
-
 // ----- Read-only ------
 @property (nonatomic, assign, getter=getDuration, readonly) float currentTime;
 @property (nonatomic, assign, getter=getDuration, readonly) float duration;

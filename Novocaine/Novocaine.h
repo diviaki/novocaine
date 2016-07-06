@@ -36,6 +36,8 @@
     #include <CoreAudio/CoreAudio.h>
 #endif
 
+#include "AudioFileWriter.h"
+
 #include <Block.h>
 
 FOUNDATION_EXTERN void CheckError(OSStatus error, const char *operation);
@@ -90,6 +92,8 @@ typedef void (^NovocaineInputBlock)(float *data, UInt32 numFrames, UInt32 numCha
 // Audio Unit methods
 - (void)play;
 - (void)pause;
+
+- (void)recordOutput:(NSString*)filename;
 
 #if defined ( USING_IOS )
 - (void)checkSessionProperties;
