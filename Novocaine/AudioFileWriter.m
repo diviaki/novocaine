@@ -76,8 +76,9 @@ static pthread_mutex_t outputAudioFileLock;
         self.audioFileURL = urlToAudioFile;
         CFURLRef audioFileRef = (__bridge CFURLRef)self.audioFileURL;
         
-        AudioStreamBasicDescription outputFileDesc = {44100.0, kAudioFormatMPEG4AAC, 0, 0, 1024, 0, thisNumChannels, 0, 0};
-        
+//        AudioStreamBasicDescription outputFileDesc = {thisSamplingRate, kAudioFormatAppleLossless, kAppleLosslessFormatFlag_32BitSourceData, 0, 0, 0, thisNumChannels, 0, 0};
+        AudioStreamBasicDescription outputFileDesc = {thisSamplingRate, kAudioFormatMPEG4AAC, 0, 0, 1024, 0, thisNumChannels, 0, 0};
+
         CheckError(ExtAudioFileCreateWithURL(audioFileRef, kAudioFileM4AType, &outputFileDesc, NULL, kAudioFileFlags_EraseFile, &_outputFile), "Creating file");
         
         
