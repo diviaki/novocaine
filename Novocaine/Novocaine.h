@@ -93,7 +93,9 @@ typedef void (^NovocaineInputBlock)(float *data, UInt32 numFrames, UInt32 numCha
 - (void)play;
 - (void)pause;
 
+#if defined ( USING_OSX )
 - (void)recordOutput:(NSString*)filename;
+#endif
 
 #if defined ( USING_IOS )
 - (void)checkSessionProperties;

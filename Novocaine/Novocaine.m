@@ -373,7 +373,9 @@ static Novocaine *audioManager = nil;
     CheckError( AudioComponentInstanceNew(outputComponent, &_outputUnit), "Couldn't create the output audio unit");
 #endif
     
+#if defined ( USING_OSX ) || defined ( OPT_USE_MICROPHONE )
     UInt32 one = 1;
+#endif
 
     // Enable input
     // TODO: Conditionally disable input if option has not been specified
