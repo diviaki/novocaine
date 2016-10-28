@@ -27,6 +27,8 @@
 #import "AudioFileWriter.h"
 #import <pthread.h>
 
+#define CheckError( function, ...) function
+
 @interface AudioFileWriter()
 
 // redeclare as readwrite in class continuation
