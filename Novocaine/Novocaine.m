@@ -100,20 +100,24 @@ static Novocaine *audioManager = nil;
 @interface Novocaine()
 
 // redeclare readwrite for class continuation
-@property (nonatomic, assign, readwrite) AudioUnit inputUnit;
+#if defined ( USING_OSX )
 @property (nonatomic, assign, readwrite) AudioUnit outputUnit;
-@property (nonatomic, assign, readwrite) AudioBufferList *inputBuffer;
-@property (nonatomic, assign, readwrite) BOOL inputAvailable;
 @property (nonatomic, assign, readwrite) UInt32 numInputChannels;
+@property (nonatomic, assign, readwrite) float *inData;
+@property (nonatomic, assign, readwrite) AudioBufferList *inputBuffer;
+#endif
+@property (nonatomic, assign, readwrite) AudioUnit inputUnit;
+@property (nonatomic, assign, readwrite) BOOL inputAvailable;
 @property (nonatomic, assign, readwrite) UInt32 numOutputChannels;
 @property (nonatomic, assign, readwrite) Float64 samplingRate;
 @property (nonatomic, assign, readwrite) NSTimeInterval bufferDuration;
 @property (nonatomic, assign, readwrite) BOOL isInterleaved;
 @property (nonatomic, assign, readwrite) UInt32 numBytesPerSample;
+#ifdef USE_MICROPHONE
 @property (nonatomic, assign, readwrite) AudioStreamBasicDescription inputFormat;
+#endif
 @property (nonatomic, assign, readwrite) AudioStreamBasicDescription outputFormat;
 @property (nonatomic, assign, readwrite) BOOL playing;
-@property (nonatomic, assign, readwrite) float *inData;
 @property (nonatomic, assign, readwrite) float *outData;
 
 #if defined (USING_OSX)
@@ -130,10 +134,6 @@ static Novocaine *audioManager = nil;
 // must be called prior to playing audio
 - (void)setupAudioSession;
 - (void)setupAudioUnits;
-
-- (NSString *)applicationDocumentsDirectory;
-
-- (void)freeBuffers;
 
 @end
 
@@ -152,33 +152,17 @@ static Novocaine *audioManager = nil;
     return audioManager;
 }
 
-+ (id)allocWithZone:(NSZone *)zone {
-    @synchronized(self) {
-        if (audioManager == nil) {
-            audioManager = [super allocWithZone:zone];
-            return audioManager;  // assignment and return on first allocation
-        }
-    }
-    return nil; // on subsequent allocation attempts return nil
-}
-
-// ND: If NSCopying protocol is to be supported, it should be declared with class and done correctly. Disabled for now.
-
-//- (id)copyWithZone:(NSZone *)zone
-//{
-//    return self;
-//}
-
 - (id)init
 {
 	if (self = [super init])
 	{
         
         // Initialize a float buffer to hold audio
+#if defined (USING_OSX)
 		self.inData  = (float *)calloc(8192, sizeof(float)); // probably more than we'll need
-        self.outData = (float *)calloc(8192, sizeof(float));
-        
-        self.inputBlock = nil;
+		self.inputBlock = nil;
+#endif
+		self.outData = (float *)calloc(8192, sizeof(float));        
         self.outputBlock = nil;
         
 #if defined ( USING_OSX )
@@ -203,62 +187,30 @@ static Novocaine *audioManager = nil;
 
 - (void)dealloc
 {
-    free(self.inData);
-    free(self.outData);
-    
+	free(self.outData);
+
 #if defined (USING_OSX)
-    if (self.deviceIDs){
+    free(self.inData);
+
+	if (self.deviceIDs){
         free(self.deviceIDs);
     }
-#endif
-    
-    [self freeBuffers];
-}
-
-- (void)freeBuffers
-{
-    if (self.inputBuffer){
-        
+	
+	//freebuffers
+	if (self.inputBuffer){
+		
 		for(UInt32 i =0; i< self.inputBuffer->mNumberBuffers ; i++) {
-
+			
 			if(self.inputBuffer->mBuffers[i].mData){
-                free(self.inputBuffer->mBuffers[i].mData);
-            }
+				free(self.inputBuffer->mBuffers[i].mData);
+			}
 		}
-        
-        free(self.inputBuffer);
-        self.inputBuffer = NULL;
-    }
-}
-
-#pragma mark - Properties
-
-// TODO: Implement this.
-//- (void)setInputEnabled:(BOOL)inputEnabled
-//{
-//    _inputEnabled = inputEnabled;
-//}
-
-#ifdef USING_IOS
-- (void)setForceOutputToSpeaker:(BOOL)forceOutputToSpeaker
-{
-	
-#if !TARGET_IPHONE_SIMULATOR && OPT_USE_MICROPHONE
-    UInt32 value = forceOutputToSpeaker ? 1 : 0;
-	
-    AVAudioSession *session = [AVAudioSession sharedInstance];
-	
-    NSError *error = nil;
-    if (![session overrideOutputAudioPort:AVAudioSessionCategoryOptionDefaultToSpeaker error:&error]) {
-        NSLog(@"Could not override audio output route to speaker - %@", [error localizedDescription]);
-    }else{
-        _forceOutputToSpeaker = forceOutputToSpeaker;
-    }
-#else
-    _forceOutputToSpeaker = forceOutputToSpeaker;
+		
+		free(self.inputBuffer);
+		self.inputBuffer = NULL;
+	}
 #endif
 }
-#endif
 
 #pragma mark - Audio Methods
 
@@ -427,6 +379,7 @@ static Novocaine *audioManager = nil;
 # if defined ( USING_IOS )
     UInt32 size;
 	size = sizeof( AudioStreamBasicDescription );
+#ifdef USE_MICROPHONE
 	CheckError( AudioUnitGetProperty(_inputUnit,
                                      kAudioUnitProperty_StreamFormat, 
                                      kAudioUnitScope_Input, 
@@ -434,7 +387,7 @@ static Novocaine *audioManager = nil;
                                      &_inputFormat,
                                      &size ),
                "Couldn't get the hardware input stream format");
-	
+#endif
 	// Check the output stream format
 	size = sizeof( AudioStreamBasicDescription );
 	CheckError( AudioUnitGetProperty(_inputUnit,
@@ -445,9 +398,11 @@ static Novocaine *audioManager = nil;
                                      &size ), 
                "Couldn't get the hardware output stream format");
 	
+#ifdef USE_MICROPHONE
     _inputFormat.mSampleRate = self.samplingRate;
-    _outputFormat.mSampleRate = self.samplingRate;
-    self.numBytesPerSample = _inputFormat.mBitsPerChannel / 8;
+#endif
+	_outputFormat.mSampleRate = self.samplingRate;
+    self.numBytesPerSample = _outputFormat.mBitsPerChannel / 8;
     
     size = sizeof(AudioStreamBasicDescription);
 	CheckError(AudioUnitSetProperty(_inputUnit,
@@ -516,7 +471,7 @@ static Novocaine *audioManager = nil;
 			   "Couldn't get ASBD from input unit");
     
     
-	// 9/6/10 - check the input device's stream format
+#ifdef USE_MICROPHONE
 	CheckError(AudioUnitGetProperty(_inputUnit,
 									kAudioUnitProperty_StreamFormat,
 									kAudioUnitScope_Input,
@@ -527,13 +482,14 @@ static Novocaine *audioManager = nil;
     
     
     _outputFormat.mSampleRate = _inputFormat.mSampleRate;
-//    outputFormat.mFormatFlags =  kAudioFormatFlagsCanonical;
-    self.samplingRate = _inputFormat.mSampleRate;
-    self.numBytesPerSample = _inputFormat.mBitsPerChannel / 8;
-    
-    self.numInputChannels = _inputFormat.mChannelsPerFrame;
-    self.numOutputChannels = _outputFormat.mChannelsPerFrame;
-    
+	
+	self.numInputChannels = _inputFormat.mChannelsPerFrame;
+#endif
+	self.numOutputChannels = _outputFormat.mChannelsPerFrame;
+
+	self.samplingRate = _outputFormat.mSampleRate;
+	self.numBytesPerSample = _outputFormat.mBitsPerChannel / 8;
+	
     propertySize = sizeof(AudioStreamBasicDescription);
 	CheckError(AudioUnitSetProperty(_inputUnit,
 									kAudioUnitProperty_StreamFormat,
@@ -576,10 +532,7 @@ static Novocaine *audioManager = nil;
 	// Buffer duration on OSX
 	self.bufferDuration = 1.0f/self.samplingRate*bufferSizeFrames;
 	NSLog(@"IO buffer duration is %f", self.bufferDuration);
-#endif
-    
-    
-    
+
 	if (_outputFormat.mFormatFlags & kAudioFormatFlagIsNonInterleaved) {
         // The audio is non-interleaved
         NSLog(@"Not interleaved!\n");
@@ -618,7 +571,7 @@ static Novocaine *audioManager = nil;
         memset(self.inputBuffer->mBuffers[0].mData, 0, bufferSizeBytes);
         
 	}
-    
+#endif
     
     // Slap a render callback on the unit
     AURenderCallbackStruct callbackStruct;
@@ -898,7 +851,7 @@ OSStatus renderCallback (void						*inRefCon,
                 }
             }
         }
-        else if ( sm.numBytesPerSample == 2 ) // then we need to convert SInt16 -> Float (and also scale)
+/*        else if ( sm.numBytesPerSample == 2 ) // then we need to convert SInt16 -> Float (and also scale)
         {
             float scale = (float)INT16_MAX;
             vDSP_vsmul(sm.outData, 1, &scale, sm.outData, 1, inNumberFrames*sm.numOutputChannels);
@@ -919,7 +872,7 @@ OSStatus renderCallback (void						*inRefCon,
             }
             
         }
-	    
+*/	    
     }
 
     return noErr;
@@ -993,18 +946,6 @@ OSStatus renderCallback (void						*inRefCon,
 
 
 #if defined ( USING_OSX )
-
-// Checks the number of channels and sampling rate of the connected device.
-- (void)checkDeviceProperties
-{
-    
-}
-
-- (void)selectAudioDevice:(AudioDeviceID)deviceID
-{
-    
-}
-
 - (void)recordOutput:(NSString*)filename
 {
 	if( filename ){
@@ -1023,13 +964,6 @@ OSStatus renderCallback (void						*inRefCon,
     }
 }
 #endif
-
-
-#pragma mark - Convenience Methods
-- (NSString *)applicationDocumentsDirectory {
-	return [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) lastObject];
-}
-
 
 @end
 

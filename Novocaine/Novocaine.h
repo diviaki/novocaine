@@ -42,8 +42,10 @@
 
 FOUNDATION_EXTERN void CheckError(OSStatus error, const char *operation);
 
-typedef void (^NovocaineOutputBlock)(float *data, UInt32 numFrames, UInt32 numChannels);
+#if defined ( USING_OSX )
 typedef void (^NovocaineInputBlock)(float *data, UInt32 numFrames, UInt32 numChannels);
+#endif
+typedef void (^NovocaineOutputBlock)(float *data, UInt32 numFrames, UInt32 numChannels);
 
 @interface Novocaine : NSObject
 
@@ -51,39 +53,38 @@ typedef void (^NovocaineInputBlock)(float *data, UInt32 numFrames, UInt32 numCha
 
 @property (nonatomic, copy)     NSString *inputRoute;
 
-// TODO: Not yet implemented. No effect right now.
-//@property (nonatomic, assign)   BOOL inputEnabled;
-
-#ifdef USING_IOS
-@property (nonatomic, assign)   BOOL forceOutputToSpeaker;
-#endif
-
 // Explicitly declaring the block setters will create the correct block signature for auto-complete.
 // These will map to the setters for the block properties below.
+#if defined ( USING_OSX )
 - (void)setInputBlock:(NovocaineInputBlock)block;
+#endif
 - (void)setOutputBlock:(NovocaineOutputBlock)block;
 
-@property (nonatomic, copy) NovocaineOutputBlock outputBlock;
+#if defined ( USING_OSX )
 @property (nonatomic, copy) NovocaineInputBlock inputBlock;
+#endif
+@property (nonatomic, copy) NovocaineOutputBlock outputBlock;
 
 // ------------------------------------------------------------------
 
 // these should be readonly in public interface - no need for public write access
-@property (nonatomic, assign, readonly) AudioUnit inputUnit;
+#if defined ( USING_OSX )
 @property (nonatomic, assign, readonly) AudioUnit outputUnit;
-@property (nonatomic, assign, readonly) AudioBufferList *inputBuffer;
-@property (nonatomic, assign, readonly) BOOL inputAvailable;
 @property (nonatomic, assign, readonly) UInt32 numInputChannels;
+@property (nonatomic, assign, readonly) AudioBufferList *inputBuffer;
+#endif
+@property (nonatomic, assign, readonly) AudioUnit inputUnit;
+@property (nonatomic, assign, readonly) BOOL inputAvailable;
 @property (nonatomic, assign, readonly) UInt32 numOutputChannels;
 @property (nonatomic, assign, readonly) Float64 samplingRate;
 @property (nonatomic, assign, readonly) NSTimeInterval bufferDuration;
 @property (nonatomic, assign, readonly) BOOL isInterleaved;
 @property (nonatomic, assign, readonly) UInt32 numBytesPerSample;
+#ifdef USE_MICROPHONE
 @property (nonatomic, assign, readonly) AudioStreamBasicDescription inputFormat;
+#endif
 @property (nonatomic, assign, readonly) AudioStreamBasicDescription outputFormat;
 @property (nonatomic, assign, readonly) BOOL playing;
-
-// @property BOOL playThroughEnabled;
 
 
 // Singleton methods
