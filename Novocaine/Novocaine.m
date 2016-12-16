@@ -958,7 +958,7 @@ OSStatus renderCallback (void						*inRefCon,
     _fileWriter = [[AudioFileWriter alloc]
                        initWithAudioFileURL:outputFileURL
                        samplingRate:self.samplingRate
-                       numChannels:self.numInputChannels];
+                       numChannels:self.numOutputChannels];
     }else{
     _fileWriter = nil;
     }
