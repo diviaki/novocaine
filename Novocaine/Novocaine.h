@@ -47,60 +47,37 @@ typedef void (^NovocaineInputBlock)(float *data, UInt32 numFrames, UInt32 numCha
 #endif
 typedef void (^NovocaineOutputBlock)(float *data, UInt32 numFrames, UInt32 numChannels);
 
-@interface Novocaine : NSObject
-
 // ------ These properties/methods are used for configuration -------
 
-@property (nonatomic, copy)     NSString *inputRoute;
+extern Float64 samplingRate;
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 // Explicitly declaring the block setters will create the correct block signature for auto-complete.
 // These will map to the setters for the block properties below.
 #if defined ( USING_OSX )
-- (void)setInputBlock:(NovocaineInputBlock)block;
+void novocaine_setInputBlock(NovocaineInputBlock block);
 #endif
-- (void)setOutputBlock:(NovocaineOutputBlock)block;
-
-#if defined ( USING_OSX )
-@property (nonatomic, copy) NovocaineInputBlock inputBlock;
-#endif
-@property (nonatomic, copy) NovocaineOutputBlock outputBlock;
+void novocaine_setOutputBlock(NovocaineOutputBlock block);
 
 // ------------------------------------------------------------------
 
-// these should be readonly in public interface - no need for public write access
-#if defined ( USING_OSX )
-@property (nonatomic, assign, readonly) AudioUnit outputUnit;
-@property (nonatomic, assign, readonly) UInt32 numInputChannels;
-@property (nonatomic, assign, readonly) AudioBufferList *inputBuffer;
-#endif
-@property (nonatomic, assign, readonly) AudioUnit inputUnit;
-@property (nonatomic, assign, readonly) BOOL inputAvailable;
-@property (nonatomic, assign, readonly) UInt32 numOutputChannels;
-@property (nonatomic, assign, readonly) Float64 samplingRate;
-@property (nonatomic, assign, readonly) NSTimeInterval bufferDuration;
-@property (nonatomic, assign, readonly) BOOL isInterleaved;
-@property (nonatomic, assign, readonly) UInt32 numBytesPerSample;
-#ifdef USE_MICROPHONE
-@property (nonatomic, assign, readonly) AudioStreamBasicDescription inputFormat;
-#endif
-@property (nonatomic, assign, readonly) AudioStreamBasicDescription outputFormat;
-@property (nonatomic, assign, readonly) BOOL playing;
-
-
-// Singleton methods
-+ (Novocaine *) audioManager;
-
 // Audio Unit methods
-- (void)play;
-- (void)pause;
+void novocaine_init();
+void novocaine_play();
+void novocaine_pause();
 
 #if defined ( USING_OSX )
-- (void)recordOutput:(NSString*)filename;
+void novocaine_recordOutput(NSString* filename);
 #endif
 
 #if defined ( USING_IOS )
-- (void)checkSessionProperties;
+void novocaine_checkSessionProperties();
+#endif
+	
+#ifdef __cplusplus
+}
 #endif
 
-
-@end
