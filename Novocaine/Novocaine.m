@@ -1,43 +1,7 @@
-// Copyright (c) 2012 Alex Wiltschko
-// 
-// Permission is hereby granted, free of charge, to any person
-// obtaining a copy of this software and associated documentation
-// files (the "Software"), to deal in the Software without
-// restriction, including without limitation the rights to use,
-// copy, modify, merge, publish, distribute, sublicense, and/or sell
-// copies of the Software, and to permit persons to whom the
-// Software is furnished to do so, subject to the following
-// conditions:
-// 
-// The above copyright notice and this permission notice shall be
-// included in all copies or substantial portions of the Software.
-// 
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
-// EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
-// OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
-// NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
-// HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
-// WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
-// FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
-// OTHER DEALINGS IN THE SOFTWARE.
-//
-// TODO:
-// Switching mic and speaker on/off
-//
-// HOUSEKEEPING AND NICE FEATURES:
-// Disambiguate outputFormat (the AUHAL's stream format)
-// More nuanced input detection on the Mac
-// Route switching should work, check with iPhone
-// Device switching should work, check with laptop. Read that damn book.
-// Wrap logging with debug macros.
-// Think about what should be public, what private.
-// Ability to select non-default devices.
-
-
 #include "Novocaine.h"
+
 #define kInputBus 1
 #define kOutputBus 0
-#define kDefaultDevice 999999
 
 #ifdef DEBUG
 #define OPT_LOG
@@ -73,15 +37,7 @@ extern "C" {
         exit(1);
     }
 #endif
-    
-#if OPT_USE_MICROPHONE
-    OSStatus inputCallback (void						*inRefCon,
-                            AudioUnitRenderActionFlags	* ioActionFlags,
-                            const AudioTimeStamp 		* inTimeStamp,
-                            UInt32						inOutputBusNumber,
-                            UInt32						inNumberFrames,
-                            AudioBufferList				* ioData);
-#endif
+	
     OSStatus renderCallback (void						*inRefCon,
                              AudioUnitRenderActionFlags	* ioActionFlags,
                              const AudioTimeStamp 		* inTimeStamp,
@@ -108,9 +64,7 @@ Float64 samplingRate;
 NSTimeInterval bufferDuration;
 BOOL isInterleaved;
 UInt32 numBytesPerSample;
-#ifdef USE_MICROPHONE
-AudioStreamBasicDescription inputFormat;
-#endif
+
 AudioStreamBasicDescription outputFormat;
 BOOL playing;
 float *outData;
@@ -126,27 +80,14 @@ AudioFileWriter* fileWriter;
 void enumerateAudioDevices();
 #endif
 
-// must be called prior to playing audio
-void setupAudioSession();
-void setupAudioUnits();
-
-#if defined ( USING_OSX )
-NovocaineInputBlock inputBlock;
-#endif
 NovocaineOutputBlock outputBlock;
 
-
-#pragma mark - Singleton Methods
 
 void novocaine_init()
 {
 	
 	// Initialize a float buffer to hold audio
-#if defined (USING_OSX)
-	inData  = (float *)calloc(8192, sizeof(float)); // probably more than we'll need
-	inputBlock = nil;
-#endif
-	outData = (float *)calloc(8192, sizeof(float));
+	outData = (float *)calloc(8192, sizeof(float)); // probably more than we'll need
 	outputBlock = nil;
 	
 #if defined ( USING_OSX )
@@ -155,93 +96,32 @@ void novocaine_init()
 	
 	playing = NO;
 	
-	// Fire up the audio session ( with steady error checking ... )
-	setupAudioSession();
-	
-	// start audio units
-	setupAudioUnits();
-}
-
-void dealloc() //todo call from app.dealloc (or skip altogether)
-{
-	free(outData);
-
-#if defined (USING_OSX)
-    free(inData);
-
-	if (deviceIDs){
-        free(deviceIDs);
-    }
-	
-	//freebuffers
-	if (inputBuffer){
-		
-		for(UInt32 i =0; i< inputBuffer->mNumberBuffers ; i++) {
-			
-			if(inputBuffer->mBuffers[i].mData){
-				free(inputBuffer->mBuffers[i].mData);
-			}
-		}
-		
-		free(inputBuffer);
-		inputBuffer = NULL;
-	}
-#endif
-}
-
-#pragma mark - Audio Methods
-
-
-void setupAudioSession()
-{
     // Initialize and configure the audio session, and add an interuption listener
     
 #if defined ( USING_IOS )
 
     AVAudioSession *session = [AVAudioSession sharedInstance];
 
-    NSError *setCategoryError = nil;
+	NSError *err = nil;
     if (![session setCategory:
-#if OPT_USE_MICROPHONE
-          AVAudioSessionCategoryPlayAndRecord
-#else
           AVAudioSessionCategoryPlayback
-#endif
-#if DEBUG   //help developers listen to music during development :)
-                withOptions:AVAudioSessionCategoryOptionMixWithOthers
-#endif
-                error:&setCategoryError]) {
-        // handle error
+                error:&err]) {
     }
 
-    // Set the audio session active
-    NSError *err = nil;
-    if (![[AVAudioSession sharedInstance] setActive:YES error:&err]){
+    if (![session setActive:YES error:&err]){
         NSLog(@"Couldn't activate audio session: %@", err);
     }
-#if OPT_USE_MICROPHONE
-    checkAudioSource();
-#endif
+	
 #elif defined ( USING_OSX )
-    // TODO: grab the audio
 	enumerateAudioDevices();
     inputAvailable = YES;
 #endif
-}
-
-
-void setupAudioUnits()
-{
-    
+	
     // --- Audio Session Setup ---
     // ---------------------------
     
 #if defined ( USING_IOS )
 	
-    AVAudioSession *session = [AVAudioSession sharedInstance];
-	
-    NSError *error = nil;
-		
     // Add a property listener, to listen to changes to the session
     //CheckError( AudioSessionAddPropertyListener(kAudioSessionProperty_AudioRouteChange, sessionPropertyListener, (__bridge void*)self), "Couldn't add audio session property listener");
 	
@@ -252,19 +132,11 @@ void setupAudioUnits()
 						 name: AVAudioSessionRouteChangeNotification
 					       object: session];
 	*/
-    // Set the buffer size, this will affect the number of samples that get rendered every time the audio callback is fired
-    // A small number will get you lower latency audio, but will make your processor work harder
 #if !TARGET_IPHONE_SIMULATOR
-    Float32 preferredBufferSize = 0.02322; //default on iOS9@iPhone5
-	
-    [session setPreferredIOBufferDuration:preferredBufferSize error:&error];
-	
     //prevent runtime switching between 44.1 (headphones) and 48kHz (built-in speakers) on latest iPhone models with iOS9
     [session setPreferredSampleRate:48000. error:nil];
-	
 #endif
-
-    
+	
     novocaine_checkSessionProperties();
     
 #endif
@@ -304,29 +176,11 @@ void setupAudioUnits()
     AudioComponent outputComponent = AudioComponentFindNext(NULL, &outputDescription);
     CheckError( AudioComponentInstanceNew(outputComponent, &outputUnit), "Couldn't create the output audio unit");
 #endif
-    
-#if defined ( USING_OSX ) || defined ( OPT_USE_MICROPHONE )
-    UInt32 one = 1;
-#endif
 
-    // Enable input
-    // TODO: Conditionally disable input if option has not been specified
-#if OPT_USE_MICROPHONE
-    //calling this pops up the "this app would like to acces your microphone, allow/deny" dialog on ios 7+
-    //only happens the very first time the app launched on a device - note that the setting survives app uninstall!
-
-    //on iOS emitting sounds work without enabling kAudioUnitScope_Output
-    CheckError( AudioUnitSetProperty(inputUnit,
-                                     kAudioOutputUnitProperty_EnableIO,
-                                     kAudioUnitScope_Input,
-                                     kInputBus,
-                                     &one,
-                                     sizeof(one)), "Couldn't enable IO on the input scope of output unit");
-#endif
-    
 #if defined ( USING_OSX )    
     // Disable output on the input unit
     // (only on Mac, since on the iPhone, the input unit is also the output unit)
+	UInt32 one = 1;
     UInt32 zero = 0;
     CheckError( AudioUnitSetProperty(inputUnit,
                                      kAudioOutputUnitProperty_EnableIO, 
@@ -359,15 +213,8 @@ void setupAudioUnits()
 # if defined ( USING_IOS )
     UInt32 size;
 	size = sizeof( AudioStreamBasicDescription );
-#ifdef USE_MICROPHONE
-	CheckError( AudioUnitGetProperty(inputUnit,
-                                     kAudioUnitProperty_StreamFormat, 
-                                     kAudioUnitScope_Input, 
-                                     1, 
-                                     &inputFormat,
-                                     &size ),
-               "Couldn't get the hardware input stream format");
-#endif
+
+	//TODO: is it necesary? Sampling rate already set!?
 	// Check the output stream format
 	size = sizeof( AudioStreamBasicDescription );
 	CheckError( AudioUnitGetProperty(inputUnit,
@@ -378,9 +225,6 @@ void setupAudioUnits()
                                      &size ), 
                "Couldn't get the hardware output stream format");
 	
-#ifdef USE_MICROPHONE
-    inputFormat.mSampleRate = samplingRate;
-#endif
 	outputFormat.mSampleRate = samplingRate;
     numBytesPerSample = outputFormat.mBitsPerChannel / 8;
     
@@ -449,22 +293,7 @@ void setupAudioUnits()
 									&outputFormat,
 									&propertySize),
 			   "Couldn't get ASBD from input unit");
-    
-    
-#ifdef USE_MICROPHONE
-	CheckError(AudioUnitGetProperty(inputUnit,
-									kAudioUnitProperty_StreamFormat,
-									kAudioUnitScope_Input,
-									kInputBus,
-									&inputFormat,
-									&propertySize),
-			   "Couldn't get ASBD from input unit");
-    
-    
-    outputFormat.mSampleRate = inputFormat.mSampleRate;
 	
-	numInputChannels = inputFormat.mChannelsPerFrame;
-#endif
 	numOutputChannels = outputFormat.mChannelsPerFrame;
 
 	samplingRate = outputFormat.mSampleRate;
@@ -485,6 +314,7 @@ void setupAudioUnits()
     
     
 #if defined ( USING_IOS )
+	//todo: ios: result not used!? test, remove if works without it
     UInt32 numFramesPerBuffer;
     size = sizeof(UInt32);
     CheckError(AudioUnitGetProperty(inputUnit,
@@ -555,21 +385,9 @@ void setupAudioUnits()
     
     // Slap a render callback on the unit
     AURenderCallbackStruct callbackStruct;
-#if OPT_USE_MICROPHONE
-    callbackStruct.inputProc = inputCallback;
-    callbackStruct.inputProcRefCon = (__bridge void *)(self);
-    
-    CheckError( AudioUnitSetProperty(inputUnit,
-                                     kAudioOutputUnitProperty_SetInputCallback, 
-                                     kAudioUnitScope_Global,
-                                     0, 
-                                     &callbackStruct, 
-                                     sizeof(callbackStruct)), "Couldn't set the callback on the input unit");
-#endif
     
     callbackStruct.inputProc = renderCallback;
-    //callbackStruct.inputProcRefCon = (__bridge void *)(self);
-# if defined ( USING_OSX )    
+# if defined ( USING_OSX )
     CheckError( AudioUnitSetProperty(outputUnit,
                                      kAudioUnitProperty_SetRenderCallback, 
                                      kAudioUnitScope_Input,
@@ -673,14 +491,8 @@ void novocaine_play() {
 	UInt32 isInputAvailable=0;
     
 #if defined ( USING_IOS )
-#if OPT_USE_MICROPHONE
-    UInt32 size = sizeof(isInputAvailable);
-	CheckError( AudioSessionGetProperty(kAudioSessionProperty_AudioInputAvailable, 
-                                        &size, 
-                                        &isInputAvailable), "Couldn't check if input was available");
-#else
+
     isInputAvailable = 1;
-#endif
 #elif defined ( USING_OSX )
     isInputAvailable = 1;
     
@@ -702,82 +514,6 @@ void novocaine_play() {
 	}
     
 }
-
-
-//#pragma mark - Render Methods
-#if OPT_USE_MICROPHONE
-OSStatus inputCallback   (void						*inRefCon,
-                          AudioUnitRenderActionFlags	* ioActionFlags,
-                          const AudioTimeStamp 		* inTimeStamp,
-                          UInt32						inOutputBusNumber,
-                          UInt32						inNumberFrames,
-                          AudioBufferList			* ioData)
-{
-//    @autoreleasepool {
-    
-        Novocaine *sm = (Novocaine *)inRefCon;
-        
-        if (!sm.playing)
-            return noErr;
-        if (sm.inputBlock == nil)
-            return noErr;    
-        
-        
-        // Check the current number of channels		
-        // Let's actually grab the audio
-#if TARGET_IPHONE_SIMULATOR
-        // this is a workaround for an issue with core audio on the simulator, //
-        //  likely due to 44100 vs 48000 difference in OSX //
-        if( inNumberFrames == 471 )
-            inNumberFrames = 470;
-#endif
-        CheckError( AudioUnitRender(sm.inputUnit, ioActionFlags, inTimeStamp, inOutputBusNumber, inNumberFrames, sm.inputBuffer), "Couldn't render the output unit");
-        
-        
-        // Convert the audio in something manageable
-        // For Float32s ... 
-        if ( sm.numBytesPerSample == 4 ) // then we've already got flaots
-        {
-            
-            float zero = 0.0f;
-            if ( ! sm.isInterleaved ) { // if the data is in separate buffers, make it interleaved
-                for (int i=0; i < sm.numInputChannels; ++i) {
-                    vDSP_vsadd((float *)sm.inputBuffer->mBuffers[i].mData, 1, &zero, sm.inData+i, 
-                               sm.numInputChannels, inNumberFrames);
-                }
-            } 
-            else { // if the data is already interleaved, copy it all in one happy block.
-                // TODO: check mDataByteSize is proper 
-                memcpy(sm.inData, (float *)sm.inputBuffer->mBuffers[0].mData, sm.inputBuffer->mBuffers[0].mDataByteSize);
-            }
-        }
-        
-        // For SInt16s ...
-        else if ( sm.numBytesPerSample == 2 ) // then we're dealing with SInt16's
-        {
-            if ( ! sm.isInterleaved ) {
-                for (int i=0; i < sm.numInputChannels; ++i) {
-                    vDSP_vflt16((SInt16 *)sm.inputBuffer->mBuffers[i].mData, 1, sm.inData+i, sm.numInputChannels, inNumberFrames);
-                }            
-            }
-            else {
-                vDSP_vflt16((SInt16 *)sm.inputBuffer->mBuffers[0].mData, 1, sm.inData, 1, inNumberFrames*sm.numInputChannels);
-            }
-            
-            float scale = 1.0 / (float)INT16_MAX;
-            vDSP_vsmul(sm.inData, 1, &scale, sm.inData, 1, inNumberFrames*sm.numInputChannels);
-        }
-        
-        // Now do the processing! 
-        sm.inputBlock(sm.inData, inNumberFrames, sm.numInputChannels);
-        
-   // }
-    
-    return noErr;
-	
-	
-}
-#endif
 
 OSStatus renderCallback (void						*inRefCon,
                          AudioUnitRenderActionFlags	* ioActionFlags,
@@ -875,42 +611,11 @@ OSStatus renderCallback (void						*inRefCon,
 }
 */
 
-#if OPT_USE_MICROPHONE
-void checkAudioSource() {
-    // Check what the incoming audio route is.
-    UInt32 propertySize = sizeof(CFStringRef);
-    CFStringRef route;
-    CheckError( AudioSessionGetProperty(kAudioSessionProperty_AudioRoute, &propertySize, &route), "Couldn't check the audio route");
-	NSString *inputRoute = (__bridge NSString *)route;
-    CFRelease(route);
-    NSLog(@"AudioRoute: %@", inputRoute);
-    
-    
-    // Check if there's input available.
-    // TODO: check if checking for available input is redundant.
-    //          Possibly there's a different property ID change?
-    UInt32 isInputAvailable = 0;
-    UInt32 size = sizeof(isInputAvailable);
-    CheckError( AudioSessionGetProperty(kAudioSessionProperty_AudioInputAvailable, 
-                                        &size, 
-                                        &isInputAvailable), "Couldn't check if input is available");
-    inputAvailable = (BOOL)isInputAvailable;
-    NSLog(@"Input available? %d", inputAvailable);
-    
-}
-#endif
-
 // To be run ONCE per session property change and once on initialization.
 void novocaine_checkSessionProperties()
 {
     AVAudioSession *session = [AVAudioSession sharedInstance];
-#if OPT_USE_MICROPHONE
-    // Check if there is input, and from where
-    checkAudioSource();
-    // Check the number of input channels.
-    numInputChannels = [session inputNumberOfChannels];
-    NSLog(@"We've got %u input channels", (unsigned int)numInputChannels);
-#endif
+
     // Check the number of input channels.
     numOutputChannels = [session outputNumberOfChannels];
     NSLog(@"We've got %u output channels", (unsigned int)numOutputChannels);
