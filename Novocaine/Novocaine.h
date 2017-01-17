@@ -21,22 +21,24 @@ typedef void (^NovocaineOutputBlock)(float *data, UInt32 numFrames, UInt32 numCh
 // ------ These properties/methods are used for configuration -------
 
 extern Float64 samplingRate;
+extern NovocaineOutputBlock outputBlock;
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 void novocaine_init();
-void novocaine_setOutputBlock(NovocaineOutputBlock block);
+inline void novocaine_setOutputBlock(NovocaineOutputBlock block){outputBlock=block;}
 void novocaine_play();
 void novocaine_pause();
-
+	
 #if defined ( USING_OSX )
 void novocaine_recordOutput(NSString* filename);
 #endif
 
 #if defined ( USING_IOS )
 void novocaine_checkSessionProperties();
+void novocaine_routechange(NSNotification* n);
 #endif
 	
 #ifdef __cplusplus
