@@ -62,7 +62,6 @@ float *outData;
 AudioFileWriter* fileWriter;
 #else
 #include "GameViewController.h"
-extern GameViewController* gwc;
 #endif
 
 void novocaine_init()
@@ -280,7 +279,7 @@ void novocaine_checkSessionProperties()
     AVAudioSession *session = [AVAudioSession sharedInstance];
 
     // Check the number of output channels. Changing when (un)plugging headphones
-    numOutputChannels = [session outputNumberOfChannels];
+    numOutputChannels = (UInt32)[session outputNumberOfChannels];
     NSLog(@"We've got %u output channels", (unsigned int)numOutputChannels);
     
     // Get the hardware sampling rate. This is settable, but here we're only reading.
