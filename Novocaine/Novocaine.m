@@ -241,6 +241,7 @@ OSStatus renderCallback (void						* inRefCon,
 #endif
 	
 	// Put the rendered data into the output buffer
+#if !TARGET_IPHONE_SIMULATOR
 	for (int iBuffer=0; iBuffer < ioData->mNumberBuffers; ++iBuffer) {
 		
 		int thisNumChannels = ioData->mBuffers[iBuffer].mNumberChannels;
@@ -255,7 +256,29 @@ OSStatus renderCallback (void						* inRefCon,
 			vDSP_vsadd(outData+interleaveOffset, numOutputChannels, &zero, (float *)ioData->mBuffers[iBuffer].mData, thisNumChannels, inNumberFrames);
 		}
 	}
-
+#else
+	//numBytesPerSample == 2: need to convert Float -> SInt16 and also scale
+	 {
+		 float scale = (float)INT16_MAX;
+		 vDSP_vsmul(outData, 1, &scale, outData, 1, inNumberFrames*numOutputChannels);
+		 
+		 for (int iBuffer=0; iBuffer < ioData->mNumberBuffers; ++iBuffer) {
+			 
+			 int thisNumChannels = ioData->mBuffers[iBuffer].mNumberChannels;
+			 
+			 for (int iChannel = 0; iChannel < thisNumChannels; ++iChannel) {
+				 
+				 int interleaveOffset = iChannel;
+				 if (iBuffer < numOutputChannels){
+					 interleaveOffset += iBuffer;
+				 }
+				 
+				 vDSP_vfix16(outData+interleaveOffset, numOutputChannels, (SInt16 *)ioData->mBuffers[iBuffer].mData+iChannel, thisNumChannels, inNumberFrames);
+			 }
+		 }
+	 }
+#endif
+	 
     return noErr;
 }
 
