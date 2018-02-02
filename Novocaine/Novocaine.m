@@ -94,9 +94,11 @@ void novocaine_init()
 						 name: AVAudioSessionRouteChangeNotification
 					       object: session];
 
+#ifdef FORCE_FIXED_SAMPLERATE
 #if !TARGET_IPHONE_SIMULATOR
     //prevent runtime switching between 44.1 (headphones) and 48kHz (built-in speakers) on latest iPhone models with iOS9
     [session setPreferredSampleRate:48000. error:nil];
+#endif
 #endif
 	
     novocaine_checkSessionProperties();
