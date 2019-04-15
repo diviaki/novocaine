@@ -27,17 +27,17 @@ extern NovocaineOutputBlock outputBlock;
 extern "C" {
 #endif
 
-void novocaine_init();
-inline void novocaine_setOutputBlock(NovocaineOutputBlock block){outputBlock=block;}
-void novocaine_play();
-void novocaine_pause();
+	void novocaine_init(void);
+static inline void novocaine_setOutputBlock(NovocaineOutputBlock block){outputBlock=block;}
+void novocaine_play(void);
+void novocaine_pause(void);
 	
 #if defined ( USING_OSX )
 void novocaine_recordOutput(NSString* filename);
 #endif
 
 #if defined ( USING_IOS )
-void novocaine_checkSessionProperties();
+void novocaine_checkSessionProperties(void);
 void novocaine_routechange(NSNotification* n);
 #endif
 	
