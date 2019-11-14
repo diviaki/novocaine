@@ -330,6 +330,7 @@ void novocaine_recordOutput(NSString* filename)
                        samplingRate:samplingRate
                        numChannels:numOutputChannels];
     }else{
+		[fileWriter stop];
 		fileWriter = nil;
     }
 }
